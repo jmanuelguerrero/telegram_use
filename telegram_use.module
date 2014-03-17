@@ -23,14 +23,14 @@ function telegram_use_menu() {
      'title' => 'Telegram contact list',
      'access arguments' => array('administer site configuration'),
      'page callback' => 'telegram_use_contactlist_page',
-     'access arguments' => array('access administration pages'),
+     'access arguments' => array('telegram_use view contact list'),
    );
    
       $items['telegram/readmessages'] = array(
      'title' => 'Messages',
      'access arguments' => array('administer site configuration'),
      'page callback' => 'telegram_use_read_messages_page',
-     'access arguments' => array('access administration pages'),
+     'access arguments' => array('telegram_use read messages'),
    );
      
    return $items;
@@ -44,13 +44,15 @@ function telegram_use_contactlist_page(){
 
 function telegram_use_read_messages_page(){
   $user = $_GET['user'];
-  (isset($_GET['new'])) ?  $new = $_GET['new'] : NULL;
-  $form_state['build_info']['args'][0][0] = $user;
-  (isset($_GET['new'])) ? $form_state['build_info']['args'][0][1] = $new : NULL;
-  $output = drupal_get_form('telegram_use_read_messages_form', $form_state['build_info']['args'][0]);
-  //$output.= grupal_get_form('telegram_use_send_form');
+  $defaultresults = 5;
+  (isset($_GET['new'])) ?  $new = $_GET['new'] : $new = NULL;
+  $output['form1'] = drupal_get_form('telegram_use_read_messages_form', $user, $new, $defaultresults);
+  $output['form2'] = drupal_get_form('telegram_use_send_form', $user);
+  
 	return $output;
 }
+
+
 function telegram_use_contact_list_form($form, &$form_state) {
   if (isset($form_state['output'])) {
     $form['output'] = array(
@@ -81,27 +83,51 @@ function telegram_use_contact_list_form_submit($form, &$form_state) {
   $form_state['rebuild'] = TRUE;
 }
 
-function telegram_use_read_messages_form($form, &$form_state) {
-  $user = &$form_state['values']['user'];
-  $new = &$form_state['values']['new'];
-  (isset($form_state['build_info']['args'][0][1])) ? $newmessages = $form_state['build_info']['args'][0][1] : $newmessages = NULL;
+function telegram_use_read_messages_form($form, &$form_state, $user, $new = NULL, $defaultresults) {
   if (isset($form_state['output'])) {
     $form['output'] = array(
       '#type' => 'fieldset',
       '#value' => 'output',
     ) + $form_state['output'];
   }
-
-
+  $form['numbermessages'] = array(
+  		'#type' => 'select',
+  		'#title' => 'N. Messages',
+  		'#default_value' => $defaultresults,
+  		'#options' => Array
+  		(
+  				'5' => 5,
+  				'10' => 10,
+  				'15' => 15,
+  				'20' => 20,
+  				'25' => 25,
+  				'30' => 30,
+  				'35' => 35,
+  				'40' => 40,
+  				'45' => 45,
+  				'50' => 50,
+  				'55' => 55,
+  				'60' => 60,
+  				'65' => 65,
+  				'70' => 70,
+  				'75' => 75,
+  				'80' => 80,
+  				'85' => 85,
+  				'90' => 90,
+  				'95' => 95,
+  				'100' => 100,
+  		)
+  );
+  
+  $form['view'] = array('#type' => 'submit', '#value' => t('View'));
+  isset($new) ? $newmessages = $new : (isset($form_state['values']['numbermessages']) ? $newmessages = $form_state['values']['numbermessages'] : $newmessages = $defaultresults);
     // Add list messages
   $form['contacts'] = array(
     '#title' => t('Messages'),
     '#type' => 'item',
-    '#markup' => telegram_use_read_messages($form_state['build_info']['args'][0][0], $newmessages),
+    '#markup' => telegram_use_read_messages($user, $newmessages),
   );
   
-  //$form['readmessages'] = array('#type' => 'submit', '#value' => t('Read'));
-
   return $form;
 }
 
@@ -115,11 +141,10 @@ function telegram_use_read_messages_form_submit($form, &$form_state) {
 }
 
 
-
 /**
  * Send form.
  */
-function telegram_use_send_form($form, &$form_state) {
+function telegram_use_send_form($form, &$form_state, $user) {
   if (isset($form_state['output'])) {
     $form['output'] = array(
       '#type' => 'fieldset',
@@ -129,7 +154,8 @@ function telegram_use_send_form($form, &$form_state) {
   $form['to'] = array(
     '#title' => t('To'),
     '#description' => t('Telegram user name or phone number.'),
-    '#type' => 'textfield',
+    '#type' => 'hidden',
+  	'#default_value' => $user,
     '#size' => 20,
   );
   $form['text'] = array(
@@ -150,19 +176,8 @@ function telegram_use_send_form_submit($form, &$form_state) {
   $client = telegram_client();
   $to = $form_state['values']['to'];
   $text = $form_state['values']['text'];
-
-  if ($to && $text) {
-    drupal_set_message(t('Sending'));
-    if (is_numeric($to)) {
-      $result = $client->sendToPhone($to, $text);
-    }
-    else {
-      $to = $client->nameToPeer($to);
-      $result = $client->sendToPeer($to, $text);
-    }
-    $output['result'] = $result;
-  }
-
+  $result = $client->sendMessage($to, $text);
+  $output['result'] = $result;
   $form_state['rebuild'] = TRUE;
   $client->stop();
 }
@@ -205,8 +220,8 @@ function telegram_use_read_messages($user, $new = NULL) {
     $rows[] = array(
       check_plain($message->date),
       check_plain($message->peer),
-      check_plain($message->direction),
-      check_plain($message->msg)
+      check_plain($message->_direction),
+      check_plain($message->text)
     );
   }
   return theme('table', array('header' => $header, 'rows' => $rows));
